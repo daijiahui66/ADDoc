@@ -51,11 +51,11 @@
 
 | 首页 | 文档编辑 |
 | :---: | :---: |
-| ![Dashboard](https://via.placeholder.com/400x250?text=Dashboard+Screenshot) | ![Editor](https://via.placeholder.com/400x250?text=Editor+Screenshot) |
+| ![Dashboard](https://gitee.com/daijiahui/addoc/raw/master/assets/%E9%A6%96%E9%A1%B5.png) | ![Editor](https://gitee.com/daijiahui/addoc/raw/master/assets/%E6%96%87%E6%A1%A3%E7%BC%96%E8%BE%91.png) |
 
 | 文档阅读 | 后台首页 |
 | :---: | :---: |
-| ![Reading](https://via.placeholder.com/400x250?text=Reading+Screenshot) | ![About](https://via.placeholder.com/400x250?text=About+Screenshot) |
+| ![Reading](https://gitee.com/daijiahui/addoc/raw/master/assets/%E6%96%87%E6%A1%A3%E9%98%85%E8%AF%BB.png) | ![About](https://gitee.com/daijiahui/addoc/raw/master/assets/%E5%90%8E%E5%8F%B0%E9%A6%96%E9%A1%B5.png) |
 
 ## 🚀 快速开始 (开发模式)
 
@@ -116,7 +116,7 @@ npm run dev
 ## 🙏 感谢打赏
 | 微信 | 支付宝 |
 | :---: | :---: |
-| ![Dashboard](https://via.placeholder.com/400x250?text=Dashboard+Screenshot) | ![Editor](https://via.placeholder.com/400x250?text=Editor+Screenshot) |
+| ![Dashboard](https://gitee.com/daijiahui/addoc/raw/master/assets/wechat.png) | ![Editor](https://gitee.com/daijiahui/addoc/raw/master/assets/alipay.png) |
 ---
 
 <p align="center">Copyright © 2026 ADDoc. Powered by Coffee & Bugs ☕🐛</p>
