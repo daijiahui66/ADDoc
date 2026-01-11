@@ -1,4 +1,4 @@
-<img width="1000" height="1000" alt="image" src="https://github.com/user-attachments/assets/e436232d-a749-42a9-937b-c8dfd63b8e83" /># ADDoc 个人知识库系统
+
 
 <p align="center">
   <img src="./frontend/public/favicon.svg" width="100" height="100" alt="ADDoc Logo">
