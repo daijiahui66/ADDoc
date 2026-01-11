@@ -49,11 +49,11 @@
 
 > *请在此处替换为您实际的运行截图，建议上传至 Gitee 仓库的 assets 目录或图床*
 
-| 后台首页 | 文档编辑 |
+| 首页 | 文档编辑 |
 | :---: | :---: |
 | ![Dashboard](https://via.placeholder.com/400x250?text=Dashboard+Screenshot) | ![Editor](https://via.placeholder.com/400x250?text=Editor+Screenshot) |
 
-| 文档阅读 | 关于页面 (CLI风格) |
+| 文档阅读 | 后台首页 |
 | :---: | :---: |
 | ![Reading](https://via.placeholder.com/400x250?text=Reading+Screenshot) | ![About](https://via.placeholder.com/400x250?text=About+Screenshot) |
 
@@ -96,20 +96,6 @@ npm run dev
 
 访问 `http://localhost:5173` 即可看到系统界面。
 
-## 📦 生产环境部署 (Windows 离线)
-
-本项目支持**前后端一体化部署**，无需 Nginx，适合内网环境。
-
-1. **前端构建**：在 `frontend` 目录下运行 `npm run build`，生成 `dist` 目录。
-2. **依赖准备**：在有网环境下载 Python 安装包及 `pip download` 离线依赖包。
-3. **服务器配置**：
-* 安装 Python。
-* 使用 `pip install --no-index` 安装离线依赖。
-* 运行 `python main.py` (后端已配置挂载 `dist` 静态资源)。
-
-
-
-*详细部署步骤请参考项目目录下的 `DEPLOY.md` (如有)。*
 
 ## 🤝 贡献与反馈
 
@@ -120,14 +106,17 @@ npm run dev
 
 **饿死小胖子**
 
-* 📧 Email: daijiahui@88.com
 * 💻 Role: 医疗行业信息工程师 / 业余全栈开发者
 
-## 🙏 特别致谢
+## 🚀 特别致谢
 
 * **Gemini & Trae**: 感谢 AI 提供的强力代码辅助与架构建议。
 * **Open Source**: 感谢所有开源社区的贡献者。
 
+## 🙏 感谢打赏
+| 微信 | 支付宝 |
+| :---: | :---: |
+| ![Dashboard](https://via.placeholder.com/400x250?text=Dashboard+Screenshot) | ![Editor](https://via.placeholder.com/400x250?text=Editor+Screenshot) |
 ---
 
 <p align="center">Copyright © 2026 ADDoc. Powered by Coffee & Bugs ☕🐛</p>
