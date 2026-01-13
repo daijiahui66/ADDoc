@@ -2,7 +2,8 @@ import axios from 'axios';
 import { useAuthStore } from '../stores/auth';
 
 const service = axios.create({
-  baseURL: 'http://127.0.0.1:8000',
+  // baseURL: 'http://127.0.0.1:8000', // Dev
+  baseURL: '', // Prod (Relative path)
   timeout: 5000,
 });
 

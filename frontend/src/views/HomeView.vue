@@ -11,7 +11,7 @@ const loading = ref(true)
 
 const fetchCategories = async () => {
     try {
-        const response = await request.get('/structure/tree')
+        const response = await request.get('/api/structure/tree')
         categories.value = response.data.map((cat: any) => {
             // Calculate total docs
             let docCount = 0

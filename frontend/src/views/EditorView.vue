@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import request from '../api/request'
 import MarkdownIt from 'markdown-it'
+import markdownItMark from 'markdown-it-mark'
+import markdownItSub from 'markdown-it-sub'
+import markdownItSup from 'markdown-it-sup'
+import markdownItTaskLists from 'markdown-it-task-lists'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import { ElMessage } from 'element-plus'
+import EmojiPicker from 'vue3-emoji-picker'
+import 'vue3-emoji-picker/css'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,11 +33,14 @@ const categories = ref<any[]>([])
 const subCategories = ref<any[]>([])
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const previewRef = ref<HTMLElement | null>(null)
+const emojiContainerRef = ref<HTMLElement | null>(null)
 const isScrolling = ref(false)
+const showEmojiPicker = ref(false)
 
 const md = new MarkdownIt({
   html: true,
   linkify: true,
+  breaks: true, // Enable hard line breaks
   typographer: true,
   highlight: function (str: string, lang: string): string {
     if (lang && hljs.getLanguage(lang)) {
@@ -44,6 +53,10 @@ const md = new MarkdownIt({
     return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
   }
 })
+.use(markdownItMark)
+.use(markdownItSub)
+.use(markdownItSup)
+.use(markdownItTaskLists)
 
 const previewContent = computed(() => {
   return md.render(form.value.content || '')
@@ -51,7 +64,7 @@ const previewContent = computed(() => {
 
 const fetchCategories = async () => {
   try {
-    const treeResponse = await request.get('/structure/tree')
+    const treeResponse = await request.get('/api/structure/tree')
     categories.value = treeResponse.data
   } catch (error) {
     console.error('Failed to fetch categories', error)
@@ -69,7 +82,7 @@ const handleCategoryChange = () => {
 const fetchDoc = async () => {
   if (!isEditMode) return
   try {
-    const response = await request.get(`/docs/${docId}`)
+    const response = await request.get(`/api/docs/${docId}`)
     const doc = response.data
     form.value = {
       title: doc.title,
@@ -100,11 +113,11 @@ const handleSave = async () => {
 
   try {
     if (isEditMode) {
-      await request.put(`/docs/${docId}`, form.value)
+      await request.put(`/api/docs/${docId}`, form.value)
       ElMessage.success('更新成功')
       router.push(`/docs/${docId}`)
     } else {
-      const response = await request.post('/docs', form.value)
+      const response = await request.post('/api/docs', form.value)
       ElMessage.success('创建成功')
       const newId = response.data?.id
       router.push(newId ? `/docs/${newId}` : '/')
@@ -117,6 +130,12 @@ const handleSave = async () => {
 
 const handleCancel = () => {
   router.back()
+}
+
+// Emoji Selection
+const onSelectEmoji = (emoji: any) => {
+  insertText(emoji.i)
+  showEmojiPicker.value = false
 }
 
 // Toolbar Logic
@@ -213,7 +232,14 @@ const handleDrop = (event: DragEvent) => {
   }
 }
 
+const handleClickOutside = (event: MouseEvent) => {
+  if (showEmojiPicker.value && emojiContainerRef.value && !emojiContainerRef.value.contains(event.target as Node)) {
+    showEmojiPicker.value = false
+  }
+}
+
 onMounted(async () => {
+  document.addEventListener('click', handleClickOutside)
   await fetchCategories()
   if (isEditMode) {
     await fetchDoc()
@@ -229,6 +255,10 @@ onMounted(async () => {
         }
     }
   }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
@@ -313,40 +343,70 @@ onMounted(async () => {
 
         <div class="flex-1 bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col overflow-hidden">
             
-            <div class="h-10 border-b border-gray-100 bg-gray-50 flex items-center px-3 space-x-1 flex-none select-none">
+            <div class="h-10 border-b border-gray-100 bg-gray-50 flex items-center px-3 space-x-1 flex-none select-none flex-wrap z-20">
                 <button @click="insertText('**', '**')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="加粗">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6V4zm0 8h9a4 4 0 014 4 4 4 0 01-4 4H6v-8z"></path></svg>
                 </button>
                 <button @click="insertText('*', '*')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="斜体">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
                 </button>
-                <div class="w-px h-4 bg-gray-300 mx-1"></div>
-                <button @click="insertText('# ')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors font-bold text-xs">H1</button>
-                <button @click="insertText('## ')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors font-bold text-xs">H2</button>
-                <div class="w-px h-4 bg-gray-300 mx-1"></div>
+                <button @click="insertText('~~', '~~')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="删除线">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                </button>
+                <div class="w-px h-4 bg-gray-300 mx-1 flex-shrink-0"></div>
+                <button @click="insertText('# ')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors font-bold text-xs flex-shrink-0">H1</button>
+                <button @click="insertText('## ')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors font-bold text-xs flex-shrink-0">H2</button>
+                <button @click="insertText('### ')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors font-bold text-xs flex-shrink-0">H3</button>
+                <div class="w-px h-4 bg-gray-300 mx-1 flex-shrink-0"></div>
                 <button @click="insertText('- ')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="无序列表">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                 </button>
                 <button @click="insertText('1. ')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="有序列表">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h12M7 12h12M7 17h12M3 7h.01M3 12h.01M3 17h.01"></path></svg>
                 </button>
+                <button @click="insertText('- [ ] ')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="任务列表">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </button>
                 <button @click="insertText('> ')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="引用">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
                 </button>
-                <div class="w-px h-4 bg-gray-300 mx-1"></div>
+                <div class="w-px h-4 bg-gray-300 mx-1 flex-shrink-0"></div>
+                <button @click="insertText('\n---\n')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="分割线">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+                </button>
                 <button @click="insertText('[', '](url)')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="链接">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
                 </button>
                 <button @click="insertText('\n| Header | Header |\n| --- | --- |\n| Cell | Cell |', '')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="表格">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7-8h14a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm0 8h14a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z"></path></svg>
                 </button>
-                <div class="w-px h-4 bg-gray-300 mx-1"></div>
+                <div class="w-px h-4 bg-gray-300 mx-1 flex-shrink-0"></div>
                 <button @click="insertText('```\n', '\n```')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="代码块">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
                 </button>
                 <button @click="insertText('![Image](', ')')" class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" title="图片">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                 </button>
+                
+                <div class="w-px h-4 bg-gray-300 mx-1 flex-shrink-0"></div>
+                
+                <!-- Emoji Picker Button -->
+                <div class="relative" ref="emojiContainerRef">
+                    <button 
+                        @click.stop="showEmojiPicker = !showEmojiPicker" 
+                        class="p-1.5 rounded hover:bg-gray-200 text-gray-600 transition-colors" 
+                        title="表情"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </button>
+                    
+                    <!-- Emoji Picker Popover -->
+                    <div v-if="showEmojiPicker" class="absolute right-0 z-50 shadow-xl rounded-lg" style="top: 100%; margin-top: 0.5rem; min-width: 300px;">
+                        <div class="relative z-50">
+                            <EmojiPicker :native="true" @select="onSelectEmoji" />
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="flex-1 flex overflow-hidden">

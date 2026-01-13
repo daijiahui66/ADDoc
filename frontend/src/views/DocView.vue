@@ -4,10 +4,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import request from '../api/request'
 import MarkdownIt from 'markdown-it'
+import markdownItMark from 'markdown-it-mark'
+import markdownItSub from 'markdown-it-sub'
+import markdownItSup from 'markdown-it-sup'
+import markdownItTaskLists from 'markdown-it-task-lists'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import NavBar from '../components/NavBar.vue'
-import { ElMessage, ElImageViewer } from 'element-plus'
+import { ElImageViewer } from 'element-plus'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,6 +35,7 @@ let observer: IntersectionObserver | null = null
 const md = new MarkdownIt({
   html: true,
   linkify: true,
+  breaks: true, // Enable hard line breaks
   typographer: true,
   highlight: function (str: string, lang: string): string {
     if (lang && hljs.getLanguage(lang)) {
@@ -43,6 +48,10 @@ const md = new MarkdownIt({
     return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
   }
 })
+.use(markdownItMark)
+.use(markdownItSub)
+.use(markdownItSup)
+.use(markdownItTaskLists)
 
 const handleImageClick = (e: MouseEvent) => {
   const target = e.target as HTMLElement
@@ -71,7 +80,7 @@ const enhanceCodeBlocks = () => {
     // 2. 提取语言
     const classNameStr = (code.className || '') + ' ' + (pre.className || '');
     const match = /language-([a-zA-Z0-9]+)/.exec(classNameStr);
-    const langName = match ? match[1].toUpperCase() : null;
+    const langName = (match && match[1]) ? match[1].toUpperCase() : null;
 
     // 3. 创建顶部容器 (为了布局整齐)
     const header = document.createElement('div');
@@ -114,7 +123,7 @@ const generateTOC = () => {
   const article = document.querySelector('.prose')
   if (!article) return
 
-  const headers = article.querySelectorAll('h1, h2, h3')
+  const headers = article.querySelectorAll('h1, h2, h3, h4')
   headers.forEach((header, index) => {
     if (!header.id) {
       header.id = `heading-${index}`
@@ -155,7 +164,7 @@ const scrollToHeader = (id: string) => {
 
 const fetchTree = async () => {
   try {
-    const response = await request.get('/structure/tree')
+    const response = await request.get('/api/structure/tree')
     tree.value = response.data
   } catch (error) {
     console.error('Failed to fetch structure tree:', error)
@@ -168,7 +177,7 @@ const fetchDoc = async (id: string) => {
   doc.value = null
   try {
     // Pass custom config to skip global 401 redirect
-    const response = await request.get(`/docs/${id}`, { skipGlobalErrorHandler: true } as any)
+    const response = await request.get(`/api/docs/${id}`, { skipGlobalErrorHandler: true } as any)
     doc.value = response.data
     nextTick(() => {
         generateTOC()
@@ -357,9 +366,10 @@ onUnmounted(() => {
                                     activeHeaderId === item.id 
                                     ? 'text-blue-600 border-blue-600 font-medium' 
                                     : 'text-gray-500 border-transparent hover:border-gray-300',
-                                    item.level === 1 ? 'pl-4' : '',
-                                    item.level === 2 ? 'pl-4' : '',
-                                    item.level === 3 ? 'pl-8' : ''
+                                    item.level === 1 ? 'pl-0 font-semibold text-slate-800' : '',
+                                    item.level === 2 ? 'pl-4 text-slate-600' : '',
+                                    item.level === 3 ? 'pl-8 text-xs text-slate-500' : '',
+                                    item.level === 4 ? 'pl-12 text-xs text-slate-400' : ''
                                 ]"
                             >
                                 {{ item.text }}
@@ -386,116 +396,4 @@ onUnmounted(() => {
 <style>
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-/* --- 文章排版样式 (优化版) --- */
-.prose h2 { font-size: 1.5rem; font-weight: 700; color: #1e293b; margin-top: 2.5rem; margin-bottom: 1.25rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; scroll-margin-top: 80px; }
-.prose h3 { font-size: 1.25rem; font-weight: 600; color: #334155; margin-top: 2rem; margin-bottom: 1rem; scroll-margin-top: 80px; }
-.prose p { margin-bottom: 1.25rem; line-height: 1.8; color: #475569; }
-.prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.25rem; color: #475569; }
-
-/* 正文行内代码 (灰色背景，粉色文字) */
-.prose :not(pre) > code { 
-    background-color: #f1f5f9; 
-    color: #ec4899; 
-    padding: 0.2rem 0.4rem; 
-    border-radius: 0.375rem; 
-    font-size: 0.875rem; 
-    font-family: monospace; 
-    border: 1px solid #e2e8f0;
-}
-
-/* Mac Style Code Blocks (GitHub Dark Theme) */
-pre.hljs {
-    background-color: #0d1117 !important; /* Matches GitHub Dark background */
-    color: #c9d1d9;
-    padding: 1.25rem;
-    padding-top: 3rem; /* Space for Mac dots */
-    border-radius: 0.75rem;
-    overflow-x: auto;
-    margin-top: 1.5rem;
-    margin-bottom: 1.5rem;
-    position: relative;
-    border: 1px solid #1e2229;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
-    font-family: 'Fira Code', 'Menlo', 'Monaco', 'Courier New', monospace;
-    line-height: 1.6;
-}
-
-pre.hljs::before {
-    content: '';
-    position: absolute;
-    top: 1rem;
-    left: 1rem;
-    height: 0.75rem;
-    width: 0.75rem;
-    background-color: #ff5f56; /* Red */
-    border-radius: 50%;
-    box-shadow: 1.5rem 0 0 #ffbd2e, 3rem 0 0 #27c93f; /* Yellow, Green */
-    z-index: 10;
-}
-
-/* Ensure inner code doesn't override background */
-pre.hljs code {
-    background-color: transparent !important;
-    padding: 0;
-    color: inherit;
-    font-size: 0.9rem;
-}
-
-/* 侧边栏激活项样式 */
-.active-sidebar-item { 
-    color: #2563eb; 
-    background-color: #eff6ff; 
-    font-weight: 500;
-}
-.active-sidebar-item::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background-color: #2563eb;
-    border-top-right-radius: 2px;
-    border-bottom-right-radius: 2px;
-}
-
-/* --- High Contrast Overrides for Code Blocks --- */
-/* 强制覆盖 highlight.js 的默认颜色，解决"看不清"的问题 */
-
-/* 1. 字符串 (Strings) - 对应 "UTF-8" - 改为明亮的青蓝色 */
-.prose pre.hljs .hljs-string,
-.prose pre.hljs .hljs-selector-attr,
-.prose pre.hljs .hljs-template-variable,
-.prose pre.hljs .hljs-addition {
-    color: #a5d6ff !important;
-}
-
-/* 2. 属性名 (Attributes) - 对应 charset - 改为柔和的淡紫色 */
-.prose pre.hljs .hljs-attr,
-.prose pre.hljs .hljs-attribute,
-.prose pre.hljs .hljs-variable {
-    color: #d2a8ff !important;
-}
-
-/* 3. 关键字/标签 (Keywords/Tags) - 对应 meta, html, function - 改为明亮的珊瑚红 */
-.prose pre.hljs .hljs-keyword,
-.prose pre.hljs .hljs-selector-tag,
-.prose pre.hljs .hljs-tag,
-.prose pre.hljs .hljs-name,
-.prose pre.hljs .hljs-deletion {
-    color: #ff7b72 !important;
-}
-
-/* 4. 注释 (Comments) - 保持灰色但要清晰 */
-.prose pre.hljs .hljs-comment,
-.prose pre.hljs .hljs-quote {
-    color: #8b949e !important;
-    font-style: italic;
-}
-
-/* 5. 普通文本/标点 - 灰白色 */
-.prose pre.hljs {
-    color: #c9d1d9 !important; /* 基础文字颜色 */
-}
 </style>

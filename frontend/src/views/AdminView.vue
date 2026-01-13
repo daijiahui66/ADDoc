@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import request from '../api/request'
+import { getRecentActivities, getContributionData } from '../api/activity'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
@@ -34,7 +35,8 @@ const stats = ref({
   private_docs: 0,
   total_users: 0
 })
-const recentDocs = ref<any[]>([])
+const recentActivities = ref<any[]>([])
+const activityHeatmap = ref({})
 
 // Profile Form
 const profileForm = ref({
@@ -133,9 +135,9 @@ const onDrop = async (event: DragEvent, targetType: 'category' | 'subcategory' |
     
     try {
         let endpoint = ''
-        if (targetType === 'category') endpoint = '/categories/reorder'
-        else if (targetType === 'subcategory') endpoint = '/subcategories/reorder'
-        else if (targetType === 'document') endpoint = '/docs/reorder'
+        if (targetType === 'category') endpoint = '/api/categories/reorder'
+        else if (targetType === 'subcategory') endpoint = '/api/subcategories/reorder'
+        else if (targetType === 'document') endpoint = '/api/docs/reorder'
 
         await request.put(endpoint, { ids: newOrderIds })
         ElMessage.success('排序已更新')
@@ -148,20 +150,31 @@ const onDrop = async (event: DragEvent, targetType: 'category' | 'subcategory' |
 
 const fetchStats = async () => {
     try {
+        console.log('Fetching stats...')
         const response = await request.get('/api/stats')
         stats.value = response.data
     } catch (e) {
-        console.error(e)
+        console.error('Failed to fetch stats:', e)
     }
 }
 
-const fetchRecentDocs = async () => {
+const fetchRecentActivities = async () => {
     try {
-        // FIX: Remove '/docs' prefix based on actual backend behavior
-        const response = await request.get('/activity/latest', { params: { limit: 10 } })
-        recentDocs.value = response.data
+        console.log('Fetching recent activities...')
+        const response = await getRecentActivities(10)
+        recentActivities.value = response.data
     } catch (e) {
-        console.error(e)
+        console.error('Failed to fetch recent activities:', e)
+    }
+}
+
+const fetchHeatmap = async () => {
+    try {
+        console.log('Fetching heatmap data...')
+        const response = await getContributionData()
+        activityHeatmap.value = response.data
+    } catch (e) {
+        console.error('Failed to fetch heatmap data:', e)
     }
 }
 
@@ -179,7 +192,7 @@ const formatTimeAgo = (dateStr: string) => {
 const fetchUsers = async () => {
     loading.value = true
     try {
-        const response = await request.get('/users/')
+        const response = await request.get('/api/users/')
         users.value = response.data
     } catch (error) {
         console.error(error)
@@ -192,13 +205,21 @@ const fetchUsers = async () => {
 const fetchCategories = async () => {
     loading.value = true
     try {
-        const response = await request.get('/structure/tree')
+        const response = await request.get('/api/structure/tree')
         categories.value = response.data
 
-        // UX Optimization: Auto-expand Level 1 categories
+        // UX Optimization: Auto-expand Level 1 and Level 2 categories
         expandedRows.value.clear()
         categories.value.forEach((cat: any) => {
+            // 1. Expand Level 1
             expandedRows.value.add(`cat-${cat.id}`)
+            
+            // 2. Expand Level 2 (Subcategories)
+            if (cat.sub_categories && Array.isArray(cat.sub_categories)) {
+                cat.sub_categories.forEach((sub: any) => {
+                    expandedRows.value.add(`sub-${sub.id}`)
+                })
+            }
         })
     } catch (error) {
         console.error(error)
@@ -214,7 +235,8 @@ const handleTabChange = (tab: string) => {
     if (tab === 'categories') fetchCategories()
     if (tab === 'dashboard') {
         fetchStats()
-        fetchRecentDocs()
+        fetchRecentActivities()
+        fetchHeatmap()
         if (authStore.user) {
             profileForm.value.username = authStore.user.username
         }
@@ -263,7 +285,7 @@ const saveUser = async () => {
             ElMessage.warning('请填写用户名和密码')
             return
         }
-        await request.post('/users/', userForm.value)
+        await request.post('/api/users/', userForm.value)
         showUserModal.value = false
         fetchUsers()
         ElMessage.success('用户创建成功')
@@ -275,7 +297,7 @@ const saveUser = async () => {
 const deleteUser = async (id: number) => {
     try {
         await ElMessageBox.confirm('确定删除该用户吗？此操作不可恢复。', '警告', { type: 'warning' })
-        await request.delete(`/users/${id}`)
+        await request.delete(`/api/users/${id}`)
         fetchUsers()
         ElMessage.success('用户已删除')
     } catch (e) {}
@@ -292,7 +314,7 @@ const savePassword = async () => {
             ElMessage.warning('请输入新密码')
             return
         }
-        await request.put(`/users/${passwordForm.value.userId}/password`, { password: passwordForm.value.password })
+        await request.put(`/api/users/${passwordForm.value.userId}/password`, { password: passwordForm.value.password })
         showPasswordModal.value = false
         ElMessage.success('密码重置成功')
     } catch (e) {
@@ -303,7 +325,7 @@ const savePassword = async () => {
 const toggleRole = async (user: any) => {
     const newRole = user.role === 'admin' ? 'user' : 'admin'
     try {
-        await request.put(`/users/${user.id}/role`, { role: newRole })
+        await request.put(`/api/users/${user.id}/role`, { role: newRole })
         user.role = newRole
         ElMessage.success('角色已更新')
     } catch (e) {
@@ -322,72 +344,9 @@ const updateProfile = async () => {
         return
     }
     try {
-        // Backend actually requires current_password to verify
-        // But for demo/admin override we might want to relax this or force user to input it
-        // However, looking at the code, it seems we were sending empty current_password
-        // Let's assume for now we want to fix it properly:
-        // We should ask user for current password.
-        // BUT, the user prompt said "User Feedback: Backend interface DOES NOT require old password verification".
-        // Let's check the code again.
-        // backend/routers/users.py:83: def update_me_password(..., current_password: str = Body(..., embed=True), ...)
-        // IT DOES REQUIRE current_password!
-        // So we must provide it. 
-        // Since we removed the old_password field from UI based on user request, we have a conflict.
-        // Conflict Resolution: The user prompt said "User Feedback: Backend interface DOES NOT require old password verification".
-        // This suggests the user *thinks* or *wants* it to not require it, OR they modified the backend.
-        // But I read the file and it DOES require it: `if not auth_utils.verify_password(current_password, ...)`
-        
-        // Wait, I am the "Code Auditor". I see the code:
-        // @router.put("/me/password")
-        // def update_me_password(password: str = Body(..., embed=True), current_password: str = Body(..., embed=True), ...):
-        
-        // It absolutely requires `current_password`.
-        // If I send empty string, it will fail `verify_password`.
-        
-        // HOWEVER, the user explicitly asked me to "Fix Frontend Logic".
-        // And previously "User Feedback: Backend interface DOES NOT require old password verification".
-        // This is a contradiction.
-        // But wait, maybe the user wants me to use the ADMIN reset endpoint?
-        // No, this is "updateProfile" (self update).
-        
-        // Let's look at the previous turn. I removed `old_password` field.
-        // If the backend enforces it, I must restore it OR change backend.
-        // But I am restricted to "Fix Frontend Logic".
-        
-        // Let's re-read the backend code I just read:
-        // Line 83: `def update_me_password(password: str = Body(..., embed=True), current_password: str = Body(..., embed=True), ...)`
-        
-        // Okay, I will restore the `old_password` logic in Frontend because the Backend DEFINITELY needs it.
-        // The user's premise "Backend does not require old password" is FACTUALLY WRONG based on my audit.
-        // I must follow the "Source of Truth" (Backend Code) as per instructions.
-        
-        // BUT, I can't easily add a UI field in this step if I'm just fixing the function?
-        // Actually, I can. I should restore the `old_password` field in `profileForm` and the UI input.
-        
-        // Wait, looking at `AdminView.vue` current state (from previous read), the UI for "old password" is GONE.
-        // It only has "New Password" and "Confirm Password".
-        
-        // If I cannot change Backend, and UI doesn't have input, I cannot get the password.
-        // UNLESS... I use the Admin Reset endpoint `PUT /users/{id}/password` for myself?
-        // `reset_password` (Line 41) only takes `password`. And it checks `check_admin`.
-        // If I am Admin, I can reset my own password via `/users/{id}/password`!
-        // Let's check `reset_password` implementation:
-        // `user = db.query(models.User).filter(models.User.id == user_id).first()`
-        // `user.password_hash = ...`
-        // It DOES NOT check old password.
-        
-        // SO! The solution is:
-        // If I am Admin, I should use `PUT /users/{authStore.user.id}/password` instead of `/users/me/password`.
-        // This bypasses the old password check.
-        
-        // Let's verify `authStore.user.id` availability.
-        // `authStore.user` has `id`.
-        
-        // Let's modify `updateProfile` to use the Admin Reset endpoint.
-        
         if (!authStore.user?.id) return ElMessage.error('无法获取用户ID')
         
-        await request.put(`/users/${authStore.user.id}/password`, { 
+        await request.put(`/api/users/${authStore.user.id}/password`, { 
             password: profileForm.value.password 
         })
         
@@ -416,17 +375,24 @@ const openAddCategory = () => {
     showCategoryModal.value = true
 }
 
+const openEditCategory = (cat: any) => {
+    editingCategory.value = cat
+    tempName.value = cat.name
+    showCategoryModal.value = true
+}
+
 const saveCategory = async () => {
     try {
         if (editingCategory.value) {
-            await request.put(`/categories/${editingCategory.value.id}`, { name: tempName.value })
+            await request.put(`/api/categories/${editingCategory.value.id}`, { name: tempName.value })
         } else {
-            await request.post('/categories', { name: tempName.value })
+            await request.post('/api/categories', { name: tempName.value })
         }
         showCategoryModal.value = false
         fetchCategories()
         ElMessage.success('保存成功')
-    } catch (e) {
+    } catch (e: any) {
+        console.error('Save failed:', e.response || e)
         ElMessage.error('保存失败')
     }
 }
@@ -434,7 +400,7 @@ const saveCategory = async () => {
 const deleteCategory = async (id: number) => {
     try {
         await ElMessageBox.confirm('确定删除该分类吗？', '提示', { type: 'warning' })
-        await request.delete(`/categories/${id}`)
+        await request.delete(`/api/categories/${id}`)
         fetchCategories()
         ElMessage.success('删除成功')
     } catch (e) {}
@@ -447,17 +413,24 @@ const openAddSubCategory = (parentId: number) => {
     showSubCategoryModal.value = true
 }
 
+const openEditSubCategory = (sub: any) => {
+    editingSubCategory.value = sub
+    tempName.value = sub.name
+    showSubCategoryModal.value = true
+}
+
 const saveSubCategory = async () => {
     try {
         if (editingSubCategory.value) {
-            await request.put(`/subcategories/${editingSubCategory.value.id}`, { name: tempName.value })
+            await request.put(`/api/subcategories/${editingSubCategory.value.id}`, { name: tempName.value })
         } else {
-            await request.post('/subcategories', { name: tempName.value, category_id: selectedParentId.value })
+            await request.post('/api/subcategories', { name: tempName.value, category_id: selectedParentId.value })
         }
         showSubCategoryModal.value = false
         fetchCategories()
         ElMessage.success('保存成功')
-    } catch (e) {
+    } catch (e: any) {
+        console.error('Save failed:', e.response || e)
         ElMessage.error('保存失败')
     }
 }
@@ -465,7 +438,7 @@ const saveSubCategory = async () => {
 const deleteSubCategory = async (id: number) => {
     try {
         await ElMessageBox.confirm('确定删除该子分类吗？', '提示', { type: 'warning' })
-        await request.delete(`/subcategories/${id}`)
+        await request.delete(`/api/subcategories/${id}`)
         fetchCategories()
         ElMessage.success('删除成功')
     } catch (e) {}
@@ -474,7 +447,7 @@ const deleteSubCategory = async (id: number) => {
 const deleteDocument = async (id: number) => {
     try {
         await ElMessageBox.confirm('确定删除该文档吗？', '提示', { type: 'warning' })
-        await request.delete(`/docs/${id}`)
+        await request.delete(`/api/docs/${id}`)
         fetchCategories()
         ElMessage.success('删除成功')
     } catch (e) {}
@@ -482,9 +455,23 @@ const deleteDocument = async (id: number) => {
 
 
 
-onMounted(() => {
-    fetchStats()
-    fetchRecentDocs()
+onMounted(async () => {
+    console.log('AdminView Mounted - Starting Data Fetch')
+    
+    // 1. 获取用户列表 (Wait for this as it might be needed for other things, but usually it's independent. 
+    // Actually, user list is only for "Users" tab. But fetchUsers was called unconditionally before.
+    // Let's keep it safe and parallelize everything relevant.)
+    
+    // 2. 并行获取所有数据 (互不阻塞)
+    Promise.allSettled([
+        fetchUsers().catch(e => console.error('Users fetch failed', e)),
+        fetchStats().catch(e => console.error('Stats fetch failed', e)),
+        fetchRecentActivities().catch(e => console.error('Activities fetch failed', e)),
+        fetchHeatmap().catch(e => console.error('Heatmap fetch failed', e))
+    ]).then(() => {
+        console.log('All dashboard data fetched (or failed gracefully)')
+    })
+
     if (authStore.user) {
         profileForm.value.username = authStore.user.username
     }
@@ -604,21 +591,37 @@ onMounted(() => {
                         <h3 class="text-lg font-bold text-slate-800 mb-6 flex items-center">
                             <span class="mr-2 text-blue-600">⚡</span> 最近动态
                         </h3>
+                        
+                        <!-- Heatmap -->
+                        <div class="mb-8 overflow-x-auto pb-2">
+                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wider">过去一年的贡献</h4>
+                            <calendar-heatmap
+                                :values="Object.entries(activityHeatmap).map(([date, count]) => ({ date, count: Number(count) }))"
+                                :end-date="new Date()"
+                                :range-color="['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39']"
+                                :max="5"
+                                tooltip-unit="contributions"
+                                :locale="{ months: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'], days: ['日', '一', '二', '三', '四', '五', '六'], on: '于', less: '少', more: '多' }"
+                            />
+                        </div>
+
                         <div class="space-y-4">
-                            <div v-for="doc in recentDocs" :key="doc.id" class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors rounded-lg px-2 -mx-2">
+                            <div v-for="act in recentActivities" :key="act.id" class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors rounded-lg px-2 -mx-2">
                                 <div class="flex items-center">
                                     <div class="w-2 h-2 rounded-full bg-blue-500 mr-4 shadow-sm shadow-blue-200"></div>
                                     <div>
                                         <p class="text-sm text-gray-500">
-                                            <span class="text-slate-800 font-bold mr-1">{{ doc.author?.username || '用户' }}</span>
-                                            {{ doc.created_at === doc.updated_at ? '创建了' : '更新了' }} 文档 
-                                            <span class="text-blue-600 font-medium cursor-pointer hover:underline ml-1" @click="router.push('/docs/'+doc.id)">{{ doc.title }}</span>
+                                            <span class="text-slate-800 font-bold mr-1">{{ act.user_name || '用户' }}</span>
+                                            <span class="mr-1">{{ act.action === 'create' ? '创建了' : act.action === 'update' ? '更新了' : '删除了' }}</span>
+                                            {{ act.target_type === 'doc' ? '文档' : '项目' }}
+                                            <span class="text-blue-600 font-medium cursor-pointer hover:underline ml-1" v-if="act.target_type === 'doc' && act.action !== 'delete'" @click="router.push('/docs/'+act.target_id)">{{ act.details }}</span>
+                                            <span class="text-gray-600 font-medium ml-1" v-else>{{ act.details }}</span>
                                         </p>
                                     </div>
                                 </div>
-                                <span class="text-xs text-gray-400 whitespace-nowrap ml-4">{{ formatTimeAgo(doc.updated_at) }}</span>
+                                <span class="text-xs text-gray-400 whitespace-nowrap ml-4">{{ formatTimeAgo(act.time) }}</span>
                             </div>
-                            <div v-if="recentDocs.length === 0" class="text-center text-gray-400 text-sm py-4">暂无动态</div>
+                            <div v-if="recentActivities.length === 0" class="text-center text-gray-400 text-sm py-4">暂无动态</div>
                         </div>
                     </div>
                 </div>
@@ -743,6 +746,7 @@ onMounted(() => {
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 text-right space-x-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                                    <button class="text-blue-600 text-xs font-bold hover:underline" @click="openEditCategory(cat)">编辑</button>
                                     <button class="text-blue-600 text-xs font-bold hover:underline" @click="openAddSubCategory(cat.id)">+ 新增子类</button>
                                     <button class="text-slate-400 text-xs hover:text-red-600" @click="deleteCategory(cat.id)">删除</button>
                                 </td>
@@ -771,6 +775,7 @@ onMounted(() => {
                                             </div>
                                         </td>
                                         <td class="px-4 py-2 text-right space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button class="text-blue-600 text-xs hover:underline" @click="openEditSubCategory(sub)">编辑</button>
                                             <button class="text-blue-600 text-xs hover:underline" @click="router.push(`/editor/new?sub_category_id=${sub.id}`)">+ 新增文档</button>
                                             <button class="text-slate-400 text-xs hover:text-red-600" @click="deleteSubCategory(sub.id)">删除</button>
                                         </td>

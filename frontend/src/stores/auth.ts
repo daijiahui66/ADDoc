@@ -28,7 +28,7 @@ export const useAuthStore = defineStore('auth', {
       params.append('username', username);
       params.append('password', password);
 
-      const response = await request.post('/token', params, {
+      const response = await request.post('/api/token', params, {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
         }
@@ -42,7 +42,7 @@ export const useAuthStore = defineStore('auth', {
     },
     async fetchUser() {
       try {
-        const response = await request.get('/users/me');
+        const response = await request.get('/api/users/me');
         this.user = response.data;
       } catch (error) {
         this.logout();

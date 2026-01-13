@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  addoc_server:
+    container_name: addoc_server
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "10806:8000"
+    volumes:
+      - ./backend/data:/app/data
+      - ./backend/uploads:/app/uploads
+    environment:
+      - TZ=Asia/Shanghai
+    restart: always
